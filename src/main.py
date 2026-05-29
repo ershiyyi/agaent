@@ -36,7 +36,7 @@ def build_ui():
                     placeholder="留空则由选题策划师自动推荐最佳方向",
                     lines=2,
                 )
-                run_btn = gr.Button("开始创作", variant="primary", size="lg")
+                run_btn = gr.Button("开始创作", variant="primary")
 
             with gr.Column(scale=2):
                 output = gr.Markdown(
