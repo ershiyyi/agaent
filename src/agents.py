@@ -1,7 +1,7 @@
-from crewai import Agent
+from crewai import Agent, LLM
 
 
-def create_agents():
+def create_agents(llm: LLM | None = None):
     strategist = Agent(
         role="内容策略分析师",
         goal="深度分析博主的定位和人设，生成一份完整的博主画像卡，包含受众画像、内容调性、核心竞争力三个维度",
@@ -10,6 +10,7 @@ def create_agents():
             "你擅长通过简短的博主描述，精准推断出目标受众特征、内容风格偏好和差异化竞争优势。"
             "你的分析总能一针见血，让创作者立刻清楚自己的定位。"
         ),
+        llm=llm,
         verbose=True,
         allow_delegation=False,
     )
@@ -23,6 +24,7 @@ def create_agents():
             "你擅长挖掘用户情绪痛点，并将它们转化为可执行的选题方案。"
             "你的选题风格倾向于实用干货 + 情绪共鸣的结合。"
         ),
+        llm=llm,
         verbose=True,
         allow_delegation=False,
     )
@@ -36,6 +38,7 @@ def create_agents():
             "你的脚本风格适配多种博主人设，能从语言节奏、用词习惯上贴合博主的身份。"
             "你交付的每一份脚本都是直接可用的拍摄蓝本。"
         ),
+        llm=llm,
         verbose=True,
         allow_delegation=False,
     )
@@ -49,6 +52,7 @@ def create_agents():
             "你不会因为情面放水——低于6分的脚本必须退回修改，并给出明确的修改方向。"
             "你的目标是确保每一支视频发布后达到基准播放量。"
         ),
+        llm=llm,
         verbose=True,
         allow_delegation=False,
     )

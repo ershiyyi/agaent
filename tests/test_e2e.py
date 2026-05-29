@@ -2,9 +2,23 @@ from unittest.mock import patch, MagicMock
 from src.crew import run_blogger_crew
 
 
+@patch("src.crew.create_tasks")
+@patch("src.crew.create_agents")
+@patch("src.crew.load_config")
+@patch("src.crew.LLM")
 @patch("src.crew.Crew")
-def test_full_pipeline_with_pass(mock_crew_class):
+def test_full_pipeline_with_pass(mock_crew_class, mock_llm_class, mock_load_config, mock_create_agents, mock_create_tasks):
     """Reviewer says PASS on first attempt -- revision loop is never entered."""
+    mock_load_config.return_value = {
+        "api_key": "test-api-key",
+        "model": "claude-sonnet-4-6",
+        "temperature": 0.7,
+        "max_tokens": 2000,
+    }
+    mock_llm_class.return_value = MagicMock()
+    mock_create_agents.return_value = [MagicMock(), MagicMock(), MagicMock(), MagicMock()]
+    mock_create_tasks.return_value = [MagicMock(), MagicMock(), MagicMock(), MagicMock()]
+
     def crew_factory(*args, **kwargs):
         mock_crew = MagicMock()
         tasks = kwargs.get("tasks", [])
@@ -44,9 +58,23 @@ def test_full_pipeline_with_pass(mock_crew_class):
     assert len(first_call_kwargs["tasks"]) == 4
 
 
+@patch("src.crew.create_tasks")
+@patch("src.crew.create_agents")
+@patch("src.crew.load_config")
+@patch("src.crew.LLM")
 @patch("src.crew.Crew")
-def test_full_pipeline_needs_revision(mock_crew_class):
+def test_full_pipeline_needs_revision(mock_crew_class, mock_llm_class, mock_load_config, mock_create_agents, mock_create_tasks):
     """Reviewer says REVISE on first run, PASS on revision -- exactly 2 Crews."""
+    mock_load_config.return_value = {
+        "api_key": "test-api-key",
+        "model": "claude-sonnet-4-6",
+        "temperature": 0.7,
+        "max_tokens": 2000,
+    }
+    mock_llm_class.return_value = MagicMock()
+    mock_create_agents.return_value = [MagicMock(), MagicMock(), MagicMock(), MagicMock()]
+    mock_create_tasks.return_value = [MagicMock(), MagicMock(), MagicMock(), MagicMock()]
+
     call_count = [0]
 
     def crew_factory(*args, **kwargs):
@@ -100,10 +128,24 @@ def test_full_pipeline_needs_revision(mock_crew_class):
     assert len(second_call_kwargs["tasks"]) == 2
 
 
+@patch("src.crew.create_tasks")
+@patch("src.crew.create_agents")
+@patch("src.crew.load_config")
+@patch("src.crew.LLM")
 @patch("src.crew.Crew")
-def test_pipeline_exhausted_revisions(mock_crew_class):
+def test_pipeline_exhausted_revisions(mock_crew_class, mock_llm_class, mock_load_config, mock_create_agents, mock_create_tasks):
     """When reviewer ALWAYS says REVISE, function returns after MAX_REVISION_ROUNDS (2)
     without infinite looping."""
+    mock_load_config.return_value = {
+        "api_key": "test-api-key",
+        "model": "claude-sonnet-4-6",
+        "temperature": 0.7,
+        "max_tokens": 2000,
+    }
+    mock_llm_class.return_value = MagicMock()
+    mock_create_agents.return_value = [MagicMock(), MagicMock(), MagicMock(), MagicMock()]
+    mock_create_tasks.return_value = [MagicMock(), MagicMock(), MagicMock(), MagicMock()]
+
     call_count = [0]
 
     def crew_factory(*args, **kwargs):

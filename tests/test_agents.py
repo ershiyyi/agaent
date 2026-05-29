@@ -3,7 +3,7 @@ from src.agents import create_agents
 
 
 def test_creates_four_agents():
-    agents = create_agents()
+    agents = create_agents(llm=None)
     assert len(agents) == 4
     names = [a.role for a in agents]
     assert "内容策略分析师" in names
@@ -13,7 +13,7 @@ def test_creates_four_agents():
 
 
 def test_agents_have_goals():
-    agents = create_agents()
+    agents = create_agents(llm=None)
     for agent in agents:
         assert agent.goal, f"{agent.role} should have a goal"
         assert agent.backstory, f"{agent.role} should have a backstory"
