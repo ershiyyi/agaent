@@ -16,7 +16,12 @@ def test_llm_config_has_model():
 
 def test_load_config_missing_key():
     with patch.dict(os.environ, {}, clear=True):
-        if "ANTHROPIC_API_KEY" in os.environ:
-            del os.environ["ANTHROPIC_API_KEY"]
         config = load_config()
-        assert config["api_key"] == "" or config["api_key"] is None
+        assert config["api_key"] == ""
+
+
+def test_load_config_includes_llm_fields():
+    config = load_config()
+    assert config["model"] == LLM_CONFIG["model"]
+    assert config["temperature"] == LLM_CONFIG["temperature"]
+    assert config["max_tokens"] == LLM_CONFIG["max_tokens"]
