@@ -28,3 +28,18 @@ def test_planner_task_depends_on_strategist():
     tasks = create_tasks(agents)
     # Verify planner task references strategist output
     assert "{strategist_output}" in tasks[1].description
+
+
+def test_writer_task_contains_template_variables():
+    agents = create_agents()
+    tasks = create_tasks(agents)
+    assert "{strategist_output}" in tasks[2].description
+    assert "{selected_topic}" in tasks[2].description
+
+
+def test_reviewer_task_contains_template_variables():
+    agents = create_agents()
+    tasks = create_tasks(agents)
+    assert "{writer_output}" in tasks[3].description
+    assert "{selected_topic}" in tasks[3].description
+    assert "{strategist_output}" in tasks[3].description
