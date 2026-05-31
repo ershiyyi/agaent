@@ -1,5 +1,6 @@
 import asyncio
 import json
+import os
 import threading
 from pathlib import Path
 from fastapi import FastAPI, Request
@@ -164,6 +165,12 @@ async def run_step(req: StepRequest):
     return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=7861)
+    port = int(os.getenv("PORT", "7861"))
+    uvicorn.run(app, host="0.0.0.0", port=port)
