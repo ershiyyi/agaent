@@ -1,58 +1,169 @@
-import gradio as gr
-from src.crew import run_blogger_crew
+import asyncio
+import json
+import threading
+from pathlib import Path
+from fastapi import FastAPI, Request
+from fastapi.responses import HTMLResponse, StreamingResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel
+from src.crew import (
+    run_blogger_crew,
+    run_strategist_step,
+    run_planner_step,
+    run_writer_step,
+    run_reviewer_step,
+    STRATEGIST_DIRECTIONS,
+    PLANNER_DIRECTIONS,
+)
 
 
-def run_pipeline(blogger_info: str, selected_topic: str) -> str:
-    """供Gradio调用的包装函数."""
-    if not blogger_info.strip():
-        return "## 请输入博主定位信息"
-    try:
-        result = run_blogger_crew(
-            user_input=blogger_info.strip(),
-            selected_topic=selected_topic.strip() if selected_topic else "",
-        )
-        return f"## 生成结果\n\n{result}"
-    except Exception as e:
-        return f"## 运行出错\n\n```\n{str(e)}\n```"
+app = FastAPI(title="抖音博主创作助手")
 
 
-def build_ui():
-    with gr.Blocks(title="博主创作助手", theme=gr.themes.Soft()) as app:
-        gr.Markdown("# 🎬 博主创作多Agent助手")
-        gr.Markdown("输入你的博主定位，AI团队帮你完成选题策划和脚本创作。")
+class RunRequest(BaseModel):
+    user_input: str
+    selected_topic: str = ""
+    template: str = ""
 
-        with gr.Row():
-            with gr.Column(scale=1):
-                blogger_info = gr.Textbox(
-                    label="博主定位",
-                    placeholder=(
-                        "例：我是做美妆教程的博主，粉丝以18-25岁女性为主，"
-                        "风格偏实用干货，希望内容有干货也有情绪共鸣..."
-                    ),
-                    lines=5,
+
+class StepRequest(BaseModel):
+    user_input: str
+    step: str  # "strategist" | "planner" | "writer" | "reviewer"
+    direction: str = ""
+    strategist_output: str = ""
+    planner_output: str = ""
+    writer_output: str = ""
+    selected_topic: str = ""
+    template: str = ""
+
+
+@app.get("/", response_class=HTMLResponse)
+async def index():
+    html_path = Path(__file__).parent.parent / "static" / "index.html"
+    return html_path.read_text(encoding="utf-8")
+
+
+@app.post("/api/run")
+async def run_crew(req: RunRequest):
+    """SSE endpoint: run the crew and stream progress events."""
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def progress_callback(event: dict):
+        loop.call_soon_threadsafe(queue.put_nowait, event)
+
+    def run_in_thread():
+        try:
+            outcome = run_blogger_crew(
+                user_input=req.user_input,
+                selected_topic=req.selected_topic,
+                template=req.template,
+                progress_callback=progress_callback,
+            )
+            progress_callback({
+                "agent": "✅ 全部完成",
+                "stage": "final",
+                "output": outcome["result"],
+                "step": 99,
+                "topics": outcome.get("topics", []),
+                "revision_count": outcome.get("revision_count", 0),
+            })
+        except Exception as exc:
+            progress_callback({
+                "agent": "❌ 运行出错",
+                "stage": "error",
+                "output": str(exc),
+                "step": -1,
+            })
+
+    threading.Thread(target=run_in_thread, daemon=True).start()
+
+    async def event_stream():
+        while True:
+            event = await queue.get()
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            if event.get("stage") in ("final", "error"):
+                break
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
+
+
+@app.get("/api/directions")
+async def get_directions():
+    return {
+        "strategist": STRATEGIST_DIRECTIONS,
+        "planner": PLANNER_DIRECTIONS,
+    }
+
+
+@app.post("/api/run-step")
+async def run_step(req: StepRequest):
+    """SSE endpoint: run a single agent step and stream progress events."""
+    queue: asyncio.Queue = asyncio.Queue()
+    loop = asyncio.get_event_loop()
+
+    def progress_callback(event: dict):
+        loop.call_soon_threadsafe(queue.put_nowait, event)
+
+    def run_in_thread():
+        try:
+            if req.step == "strategist":
+                run_strategist_step(
+                    user_input=req.user_input,
+                    template=req.template,
+                    direction=req.direction,
+                    progress_callback=progress_callback,
                 )
-                topic_hint = gr.Textbox(
-                    label="主题方向（可选）",
-                    placeholder="留空则由选题策划师自动推荐最佳方向",
-                    lines=2,
+            elif req.step == "planner":
+                run_planner_step(
+                    user_input=req.user_input,
+                    strategist_output=req.strategist_output,
+                    direction=req.direction,
+                    progress_callback=progress_callback,
                 )
-                run_btn = gr.Button("开始创作", variant="primary")
-
-            with gr.Column(scale=2):
-                output = gr.Markdown(
-                    value="### 等待输入...\n\n输入博主信息后点击「开始创作」，AI团队将依次完成：\n"
-                          "1. 🎯 博主画像分析\n2. 🔥 选题策划\n3. ✍️ 脚本撰写\n4. 🔍 质量审核",
+            elif req.step == "writer":
+                run_writer_step(
+                    user_input=req.user_input,
+                    strategist_output=req.strategist_output,
+                    selected_topic=req.selected_topic,
+                    progress_callback=progress_callback,
                 )
+            elif req.step == "reviewer":
+                run_reviewer_step(
+                    user_input=req.user_input,
+                    strategist_output=req.strategist_output,
+                    selected_topic=req.selected_topic,
+                    writer_output=req.writer_output,
+                    progress_callback=progress_callback,
+                )
+            else:
+                raise ValueError(f"Unknown step: {req.step}")
+            progress_callback({
+                "agent": "",
+                "stage": "complete",
+                "output": "",
+                "step": -1,
+            })
+        except Exception as exc:
+            progress_callback({
+                "agent": "❌ 运行出错",
+                "stage": "error",
+                "output": str(exc),
+                "step": -1,
+            })
 
-        run_btn.click(
-            fn=run_pipeline,
-            inputs=[blogger_info, topic_hint],
-            outputs=output,
-        )
+    threading.Thread(target=run_in_thread, daemon=True).start()
 
-    return app
+    async def event_stream():
+        while True:
+            event = await queue.get()
+            yield f"data: {json.dumps(event, ensure_ascii=False)}\n\n"
+            if event.get("stage") in ("complete", "error"):
+                break
+
+    return StreamingResponse(event_stream(), media_type="text/event-stream")
 
 
 if __name__ == "__main__":
-    app = build_ui()
-    app.launch(server_name="127.0.0.1", server_port=7860)
+    import uvicorn
+    uvicorn.run(app, host="127.0.0.1", port=7861)

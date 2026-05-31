@@ -4,14 +4,14 @@ from src.config import load_config, LLM_CONFIG
 
 
 def test_load_config_with_env_var():
-    with patch.dict(os.environ, {"ANTHROPIC_API_KEY": "sk-ant-test"}):
+    with patch.dict(os.environ, {"DEEPSEEK_API_KEY": "sk-test-key"}):
         config = load_config()
-        assert config["api_key"] == "sk-ant-test"
+        assert config["api_key"] == "sk-test-key"
 
 
 def test_llm_config_has_model():
     assert "model" in LLM_CONFIG
-    assert LLM_CONFIG["model"].startswith("claude")
+    assert LLM_CONFIG["model"].startswith("deepseek")
 
 
 def test_load_config_missing_key():

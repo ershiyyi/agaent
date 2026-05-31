@@ -1,0 +1,1344 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抖音博主创作助手 — Multi-Agent Studio</title>
+<style>
+/* ===== Theme Variables ===== */
+:root {
+  --bg-root: #f8f7fc;
+  --bg-card: rgba(255,255,255,0.72);
+  --bg-input: rgba(255,255,255,0.65);
+  --border-light: rgba(120,100,180,0.09);
+  --border-medium: rgba(120,100,180,0.18);
+  --text-primary: #1e1b2e;
+  --text-secondary: #5a5672;
+  --text-muted: #9a96b4;
+  --accent: #fe2c55;
+  --accent-glow: rgba(254,44,85,0.10);
+  --success: #10b981;
+  --success-soft: rgba(16,185,129,0.07);
+  --warning: #f59e0b;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.03);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.05), 0 2px 5px rgba(0,0,0,0.03);
+  --shadow-lg: 0 10px 32px rgba(0,0,0,0.08), 0 3px 10px rgba(0,0,0,0.04);
+  --shadow-xl: 0 18px 50px rgba(0,0,0,0.11), 0 6px 16px rgba(0,0,0,0.05);
+  --radius: 18px; --radius-sm: 13px; --radius-xs: 9px;
+  --font-display: 'Georgia','Times New Roman','Noto Serif SC',serif;
+  --font-body: system-ui,-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  --transition: 0.35s cubic-bezier(0.4,0,0.2,1);
+  --transition-fast: 0.2s cubic-bezier(0.4,0,0.2,1);
+}
+[data-theme="dark"] {
+  --bg-root: #0f0b1a;
+  --bg-card: rgba(24,16,48,0.78);
+  --bg-input: rgba(20,12,40,0.70);
+  --border-light: rgba(140,120,200,0.10);
+  --border-medium: rgba(140,120,200,0.18);
+  --text-primary: #e8e0f0;
+  --text-secondary: #a098c0;
+  --text-muted: #6a6490;
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.15);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.20);
+  --shadow-lg: 0 10px 32px rgba(0,0,0,0.25);
+  --shadow-xl: 0 18px 50px rgba(0,0,0,0.30);
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{
+  font-family:var(--font-body);background:var(--bg-root);color:var(--text-primary);
+  overflow:hidden;display:flex;align-items:center;justify-content:center;
+  -webkit-font-smoothing:antialiased;transition:background 0.5s,color 0.5s;
+}
+.bg-layer{
+  position:fixed;inset:0;z-index:0;pointer-events:none;transition:opacity 0.5s;
+  background:
+    radial-gradient(ellipse 65% 45% at 20% 15%, rgba(254,44,85,0.035), transparent 50%),
+    radial-gradient(ellipse 50% 65% at 80% 60%, rgba(124,58,237,0.035), transparent 50%);
+}
+[data-theme="dark"] .bg-layer{opacity:0.6}
+
+/* ===== Layout ===== */
+:root { --left-width: 330px; --right-width: 310px; }
+.app-container{
+  position:relative;z-index:1;display:flex;gap:0;
+  width:min(98vw,1560px);height:min(96vh,920px);padding:4px;
+}
+.panel{
+  background:var(--bg-card);border:1px solid var(--border-light);
+  border-radius:var(--radius);backdrop-filter:blur(20px) saturate(160%);
+  -webkit-backdrop-filter:blur(20px) saturate(160%);
+  box-shadow:var(--shadow-sm);display:flex;flex-direction:column;
+  transition:background 0.5s,border-color 0.5s;
+}
+.panel-left{flex:0 0 var(--left-width);width:var(--left-width);padding:22px 22px 0;gap:12px;transition:none;overflow:hidden;display:flex;flex-direction:column}
+.panel-left::-webkit-scrollbar{width:3px}
+.panel-left::-webkit-scrollbar-track{background:transparent}
+.panel-left::-webkit-scrollbar-thumb{background:rgba(120,100,180,0.08);border-radius:2px}
+.panel-center{flex:1;padding:16px 20px;overflow-y:auto;gap:10px;min-width:280px}
+.panel-right{flex:0 0 var(--right-width);width:var(--right-width);padding:18px 20px;overflow-y:auto;gap:12px;transition:none}
+.resize-handle{
+  width:10px;cursor:col-resize;flex-shrink:0;position:relative;z-index:10;
+  display:flex;align-items:center;justify-content:center;
+  transition:background 0.2s;
+}
+.resize-handle::after{
+  content:'';width:3px;height:48px;border-radius:2px;
+  background:rgba(120,100,180,0.12);transition:background 0.2s,height 0.2s;
+}
+.resize-handle:hover::after,.resize-handle.active::after{
+  background:rgba(254,44,85,0.45);height:72px;
+}
+.resize-handle:hover,.resize-handle.active{background:rgba(254,44,85,0.04)}
+.panel-center::-webkit-scrollbar,.panel-right::-webkit-scrollbar{width:4px}
+.panel-center::-webkit-scrollbar-track,.panel-right::-webkit-scrollbar-track{background:transparent}
+.panel-center::-webkit-scrollbar-thumb,.panel-right::-webkit-scrollbar-thumb{background:rgba(120,100,180,0.10);border-radius:3px}
+
+/* ===== Header ===== */
+.header{display:flex;align-items:center;gap:8px}
+.header-logo{
+  width:34px;height:34px;border-radius:8px;
+  background:linear-gradient(135deg,#fe2c55,#ff4d6a);
+  display:flex;align-items:center;justify-content:center;
+  font-size:16px;color:#fff;flex-shrink:0;
+  box-shadow:0 3px 10px rgba(254,44,85,0.25);
+  transition:all 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+  position:relative;z-index:1;
+}
+.header-brand{
+  display:flex;align-items:center;gap:8px;cursor:pointer;
+  padding:2px 6px 2px 2px;margin:-2px 0 -2px -2px;border-radius:14px;
+  transition:all 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+  position:relative;
+}
+.header-brand::before{
+  content:'';position:absolute;inset:0;border-radius:14px;
+  background:radial-gradient(circle at 30% 50%, rgba(254,44,85,0.08), transparent 70%);
+  opacity:0;transition:opacity 0.5s;
+}
+.header-brand:hover::before{opacity:1}
+.header-brand:hover .header-logo{
+  transform:scale(1.12) rotate(-5deg);
+  box-shadow:0 6px 22px rgba(254,44,85,0.40),0 0 0 6px rgba(254,44,85,0.06);
+  border-radius:10px;
+  animation:logo-glow 1.5s ease-in-out infinite;
+}
+.header-brand:hover .header-title{
+  letter-spacing:0.08em;
+  background:linear-gradient(135deg,var(--text-primary) 0%, #fe2c55 50%, var(--text-primary) 100%);
+  background-size:200% auto;-webkit-background-clip:text;
+  -webkit-text-fill-color:transparent;background-clip:text;
+  animation:title-shine 2s ease-in-out infinite;
+}
+.header-brand:hover .header-sub{
+  color:#fe2c55;letter-spacing:0.14em;
+}
+@keyframes logo-glow{
+  0%,100%{box-shadow:0 6px 22px rgba(254,44,85,0.40),0 0 0 6px rgba(254,44,85,0.06)}
+  50%{box-shadow:0 8px 28px rgba(254,44,85,0.55),0 0 0 10px rgba(254,44,85,0.10)}
+}
+@keyframes title-shine{
+  0%,100%{background-position:0% center}
+  50%{background-position:200% center}
+}
+.header-info{display:flex;flex-direction:column;flex:1}
+.header-title{
+  font-family:var(--font-display);font-size:19px;font-weight:700;
+  color:var(--text-primary);letter-spacing:0.03em;line-height:1.2;
+  transition:all 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+}
+.header-sub{
+  font-size:9px;color:var(--text-muted);letter-spacing:0.09em;
+  text-transform:uppercase;font-weight:600;
+  transition:all 0.4s cubic-bezier(0.25,0.46,0.45,0.94);
+}
+.theme-toggle{
+  width:30px;height:30px;border-radius:8px;border:1px solid var(--border-medium);
+  background:var(--bg-input);cursor:pointer;font-size:14px;
+  display:flex;align-items:center;justify-content:center;
+  transition:all var(--transition-fast);flex-shrink:0;
+}
+.theme-toggle:hover{background:var(--bg-card);box-shadow:var(--shadow-md),0 0 12px rgba(254,44,85,0.05);transform:scale(1.06)}
+
+/* ===== Inputs ===== */
+.section-label{font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase}
+.input-group{display:flex;flex-direction:column;gap:4px}
+textarea,input[type="text"]{
+  width:100%;background:var(--bg-input);border:1px solid var(--border-light);
+  border-radius:var(--radius-sm);padding:11px 13px;color:var(--text-primary);
+  font-size:12px;font-family:var(--font-body);resize:none;
+  transition:all var(--transition-fast);outline:none;line-height:1.6;
+}
+textarea:focus,input[type="text"]:focus{
+  border-color:rgba(254,44,85,0.35);box-shadow:0 0 0 2px rgba(254,44,85,0.04),0 2px 12px rgba(254,44,85,0.05);
+  background:var(--bg-card);transform:scale(1.008);
+}
+textarea{height:90px}
+input[type="text"]{height:36px}
+textarea::placeholder,input::placeholder{color:var(--text-muted);font-size:11px}
+
+/* ===== Template Selector ===== */
+.template-row{display:flex;gap:6px;flex-wrap:wrap}
+.template-chip{
+  padding:5px 11px;font-size:11px;font-weight:600;
+  border-radius:15px;border:1px solid var(--border-light);
+  background:var(--bg-input);color:var(--text-muted);
+  cursor:pointer;transition:all var(--transition-fast);
+  letter-spacing:0.02em;white-space:nowrap;
+}
+.template-chip:hover{border-color:var(--border-medium);color:var(--text-secondary);transform:translateY(-1px) scale(1.03);box-shadow:0 2px 8px rgba(120,100,180,0.06)}
+.template-chip.selected{
+  background:rgba(254,44,85,0.07);border-color:rgba(254,44,85,0.25);
+  color:#e02d50;box-shadow:0 0 8px rgba(254,44,85,0.06);
+}
+
+/* ===== Keywords ===== */
+.keyword-module{
+  background:rgba(254,44,85,0.02);border:1px solid rgba(254,44,85,0.07);
+  border-radius:var(--radius-sm);padding:10px 14px;transition:all var(--transition-fast);
+}
+.keyword-module.has-keywords{border-color:rgba(254,44,85,0.14);background:rgba(254,44,85,0.03)}
+.keyword-header{display:flex;align-items:center;gap:5px;margin-bottom:8px}
+.keyword-header-icon{font-size:11px}
+.keyword-header-text{font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:0.08em;text-transform:uppercase}
+.keyword-list{display:flex;flex-wrap:wrap;gap:4px}
+.keyword-tag{
+  display:inline-flex;align-items:center;padding:3px 9px;font-size:10px;font-weight:500;
+  color:#e02d50;background:rgba(254,44,85,0.05);border:1px solid rgba(254,44,85,0.10);
+  border-radius:12px;animation:tag-pop 0.3s cubic-bezier(0.25,0.46,0.45,0.94) both;
+  transition:all var(--transition-fast);
+}
+.keyword-tag:hover{background:rgba(254,44,85,0.11);border-color:rgba(254,44,85,0.22);transform:translateY(-1px) scale(1.04);box-shadow:0 2px 6px rgba(254,44,85,0.06)}
+.keyword-placeholder{font-size:10px;color:var(--text-muted);font-style:italic}
+@keyframes tag-pop{from{opacity:0;transform:scale(0.85) translateY(3px)}to{opacity:1;transform:scale(1) translateY(0)}}
+
+/* ===== Button ===== */
+.btn{
+  width:100%;padding:11px 0;border:none;border-radius:var(--radius-sm);
+  font-size:13px;font-weight:600;letter-spacing:0.05em;cursor:pointer;
+  position:relative;overflow:hidden;color:#fff;
+  background:linear-gradient(135deg,#fe2c55 0%,#ff4d6a 40%,#fe2c55 100%);
+  background-size:200% 200%;transition:all 0.4s cubic-bezier(0.4,0,0.2,1);
+  box-shadow:0 3px 14px rgba(254,44,85,0.20);
+}
+.btn:hover{transform:translateY(-2px) scale(1.02);box-shadow:0 6px 26px rgba(254,44,85,0.32),0 0 0 3px rgba(254,44,85,0.04);background-position:100% 100%}
+.btn:active{transform:scale(0.98)}
+.btn:disabled{opacity:0.5;cursor:not-allowed;transform:none;box-shadow:0 2px 6px rgba(254,44,85,0.10)}
+.btn-shimmer{position:absolute;top:0;left:-100%;width:100%;height:100%;background:linear-gradient(90deg,transparent,rgba(255,255,255,0.14),transparent);animation:shimmer 2.5s infinite}
+@keyframes shimmer{100%{left:100%}}
+
+/* ===== Topic Reuse ===== */
+.topic-reuse{display:none;margin-top:2px}
+.topic-reuse.show{display:block}
+.topic-reuse-label{font-size:10px;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:6px}
+.topic-btn{
+  display:block;width:100%;padding:7px 11px;margin-bottom:4px;
+  font-size:11px;text-align:left;color:var(--text-secondary);
+  background:var(--bg-input);border:1px solid var(--border-light);
+  border-radius:8px;cursor:pointer;transition:all var(--transition-fast);
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap;
+}
+.topic-btn:hover{background:var(--bg-card);border-color:var(--border-medium);color:var(--accent);transform:translateX(3px) scale(1.01);box-shadow:0 1px 4px rgba(254,44,85,0.04)}
+.topic-btn .topic-num{font-size:9px;color:var(--accent);font-weight:700;margin-right:4px}
+
+/* ===== Workflow ===== */
+.workflow{display:flex;align-items:center;justify-content:center;gap:5px;padding:6px 0 2px;flex-shrink:0}
+.wf-node{
+  display:flex;flex-direction:column;align-items:center;gap:3px;
+  padding:6px 8px;border-radius:var(--radius-xs);
+  background:rgba(120,100,180,0.02);border:1px solid rgba(120,100,180,0.05);
+  transition:all var(--transition-fast);min-width:48px;
+}
+.wf-node .wf-icon{font-size:16px;transition:transform var(--transition-fast)}
+.wf-node .wf-label{font-size:8px;color:var(--text-muted);font-weight:600;letter-spacing:0.03em}
+.wf-node .wf-time{font-size:8px;color:var(--text-muted);margin-top:-2px}
+.wf-node.active{background:rgba(254,44,85,0.05);border-color:rgba(254,44,85,0.18);box-shadow:0 0 10px rgba(254,44,85,0.06)}
+.wf-node.active .wf-icon{animation:wf-bounce 0.8s ease-in-out infinite}
+.wf-node.active .wf-label{color:#e02d50}
+.wf-node.done{background:rgba(16,185,129,0.04);border-color:rgba(16,185,129,0.12)}
+.wf-node.done .wf-label{color:#059669}
+@keyframes wf-bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-3px)}}
+.wf-arrow{font-size:12px;color:var(--text-muted);transition:color var(--transition-fast);flex-shrink:0}
+.wf-arrow.flowing{color:#fe2c55;animation:wf-arrow-pulse 1s ease-in-out infinite}
+@keyframes wf-arrow-pulse{0%,100%{opacity:0.3}50%{opacity:1}}
+
+/* ===== Agent Cards ===== */
+.card{
+  background:var(--bg-card);border:1px solid var(--border-light);
+  border-radius:var(--radius-sm);padding:13px 18px;
+  backdrop-filter:blur(16px);box-shadow:var(--shadow-sm);
+  transition:box-shadow 0.45s cubic-bezier(0.4,0,0.2,1),
+             border-color 0.45s cubic-bezier(0.4,0,0.2,1),
+             transform 0.45s cubic-bezier(0.4,0,0.2,1);
+  position:relative;overflow:hidden;
+}
+.card:hover{border-color:var(--border-medium);box-shadow:var(--shadow-lg),0 0 20px rgba(254,44,85,0.04);transform:translateY(-2px) scale(1.008)}
+.card.pending{opacity:0.65}
+.card.active{border-color:rgba(254,44,85,0.20);box-shadow:var(--shadow-md),0 0 0 1px rgba(254,44,85,0.03);animation:card-breathe 3s ease-in-out infinite;opacity:1}
+.card.done{border-color:rgba(16,185,129,0.14);box-shadow:var(--shadow-md);animation:none;opacity:1}
+.card.done::after{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:linear-gradient(180deg,#10b981,rgba(16,185,129,0.06));border-radius:0 2px 2px 0}
+.card.pass{border-color:rgba(16,185,129,0.20);background:linear-gradient(135deg,rgba(16,185,129,0.025),var(--bg-card));box-shadow:var(--shadow-md);animation:none;opacity:1}
+.card.pass::after{content:'';position:absolute;top:0;left:0;width:3px;height:100%;background:linear-gradient(180deg,#10b981,rgba(16,185,129,0.10));border-radius:0 2px 2px 0}
+@keyframes card-breathe{0%,100%{box-shadow:var(--shadow-md),0 0 0 1px rgba(254,44,85,0.02)}50%{box-shadow:var(--shadow-md),0 0 18px rgba(254,44,85,0.07),0 0 0 2px rgba(254,44,85,0.05)}}
+.card-header{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.card-icon{width:30px;height:30px;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:14px;background:rgba(254,44,85,0.05);border:1px solid rgba(254,44,85,0.08);transition:all var(--transition-fast);flex-shrink:0}
+.card.done .card-icon,.card.pass .card-icon{background:rgba(16,185,129,0.05);border-color:rgba(16,185,129,0.10)}
+.card-title{font-size:12px;font-weight:600;color:var(--text-primary)}
+.card-step{font-size:9px;color:var(--text-muted);font-weight:500}
+.chevron{margin-left:auto;width:18px;height:18px;display:flex;align-items:center;justify-content:center;font-size:10px;color:var(--text-muted);transition:transform var(--transition-fast);flex-shrink:0}
+.card.expanded .chevron{transform:rotate(180deg)}
+.card-status-row{display:flex;align-items:center;gap:5px;flex-shrink:0}
+.card-badge{font-size:9px;padding:2px 8px;border-radius:10px;font-weight:700;letter-spacing:0.05em}
+.badge-pending{background:rgba(120,100,180,0.03);color:var(--text-muted);border:1px solid rgba(120,100,180,0.06)}
+.badge-working{background:rgba(254,44,85,0.05);color:#e02d50;border:1px solid rgba(254,44,85,0.12);animation:badge-pulse 1.6s ease-in-out infinite}
+.badge-done{background:rgba(16,185,129,0.04);color:#059669;border:1px solid rgba(16,185,129,0.10)}
+.badge-pass{background:rgba(16,185,129,0.06);color:#059669;border:1px solid rgba(16,185,129,0.14)}
+@keyframes badge-pulse{0%,100%{opacity:1}50%{opacity:0.5}}
+.loading-dots{display:flex;gap:3px}
+.loading-dot{width:4px;height:4px;border-radius:50%;background:#fe2c55;animation:dot-float 1.3s ease-in-out infinite}
+.loading-dot:nth-child(2){animation-delay:0.15s}
+.loading-dot:nth-child(3){animation-delay:0.3s}
+@keyframes dot-float{0%,60%,100%{transform:translateY(0);opacity:0.3}30%{transform:translateY(-5px);opacity:1}}
+.card-body{font-size:11px;line-height:1.7;color:var(--text-secondary);max-height:0;opacity:0;overflow:hidden;transition:all 0.45s cubic-bezier(0.4,0,0.2,1);white-space:pre-wrap}
+.card.expanded .card-body{max-height:380px;opacity:1;margin-top:8px;padding-top:10px;border-top:1px solid rgba(120,100,180,0.04);overflow-y:auto}
+.card-time{font-size:9px;color:var(--text-muted);margin-top:4px;font-style:italic}
+
+/* ===== Final Card ===== */
+.final-card{
+  background:linear-gradient(135deg,rgba(254,44,85,0.02),rgba(16,185,129,0.01));
+  border:1px solid rgba(254,44,85,0.11);border-radius:var(--radius-sm);
+  box-shadow:var(--shadow-md);overflow:hidden;
+  animation:card-in 0.5s cubic-bezier(0.25,0.46,0.45,0.94) both;
+  transition:box-shadow 0.45s,transform 0.45s;
+}
+.final-card:hover{box-shadow:var(--shadow-xl),0 0 24px rgba(16,185,129,0.06);transform:translateY(-2px) scale(1.005)}
+.final-header{display:flex;align-items:center;gap:10px;padding:14px 18px;cursor:pointer;user-select:none}
+.final-header-icon{font-size:18px}
+.final-header-title{font-size:13px;font-weight:600;color:var(--text-primary)}
+.final-header-badge{font-size:9px;padding:2px 9px;border-radius:10px;background:rgba(16,185,129,0.06);color:#059669;border:1px solid rgba(16,185,129,0.12);font-weight:700}
+.final-chevron{margin-left:auto;font-size:10px;color:var(--text-muted);transition:transform var(--transition-fast)}
+.final-card.expanded .final-chevron{transform:rotate(180deg)}
+.final-body{max-height:0;opacity:0;overflow:hidden;transition:all 0.5s cubic-bezier(0.4,0,0.2,1)}
+.final-card.expanded .final-body{max-height:500px;opacity:1;padding:0 18px 16px 18px;overflow-y:auto}
+.final-content{font-size:11px;line-height:1.75;color:var(--text-secondary);white-space:pre-wrap;border-top:1px solid rgba(120,100,180,0.05);padding-top:10px}
+
+/* ===== Version Diff ===== */
+.diff-card{
+  border:1px solid rgba(245,158,11,0.25);border-radius:var(--radius-sm);
+  background:rgba(245,158,11,0.03);padding:14px 18px;margin-top:6px;
+  animation:card-in 0.5s cubic-bezier(0.25,0.46,0.45,0.94) both;
+}
+.diff-header{display:flex;align-items:center;gap:8px;cursor:pointer;user-select:none}
+.diff-title{font-size:12px;font-weight:600;color:#d97706}
+.diff-body{max-height:0;opacity:0;overflow:hidden;transition:all 0.4s}
+.diff-card.expanded .diff-body{max-height:1000px;opacity:1;margin-top:8px}
+.diff-content{font-size:11px;line-height:1.6;color:var(--text-secondary);white-space:pre-wrap;border-top:1px solid rgba(245,158,11,0.12);padding-top:8px}
+
+/* ===== Right Panel: Report ===== */
+.report-title{font-size:12px;font-weight:700;display:flex;align-items:center;gap:6px;letter-spacing:0.02em}
+.report-section{background:var(--bg-input);border:1px solid var(--border-light);border-radius:var(--radius-xs);padding:12px 14px}
+.report-section-label{font-size:9px;font-weight:700;color:var(--text-muted);letter-spacing:0.07em;text-transform:uppercase;margin-bottom:8px}
+.score-row{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.score-label{font-size:10px;color:var(--text-secondary);width:50px;flex-shrink:0}
+.score-bar-bg{flex:1;height:5px;background:rgba(120,100,180,0.06);border-radius:3px;overflow:hidden}
+.score-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#fe2c55,#ff6b81);transition:width 0.6s cubic-bezier(0.4,0,0.2,1)}
+.score-val{font-size:10px;font-weight:700;color:var(--text-primary);width:18px;text-align:right}
+.overall-score{display:flex;align-items:center;justify-content:center;gap:12px;padding:10px 0}
+.score-circle{width:46px;height:46px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:20px;font-weight:800;background:linear-gradient(135deg,rgba(16,185,129,0.07),rgba(16,185,129,0.01));border:3px solid rgba(16,185,129,0.25);color:#059669}
+.score-circle.revise{border-color:rgba(245,158,11,0.25);color:#d97706;background:linear-gradient(135deg,rgba(245,158,11,0.07),rgba(245,158,11,0.01))}
+.score-verdict{font-size:12px;font-weight:700;color:#059669}
+.score-verdict.revise{color:#d97706}
+.stat-row{display:flex;justify-content:space-between;padding:4px 0;font-size:10px}
+.stat-label{color:var(--text-muted)}.stat-val{color:var(--text-primary);font-weight:600}
+
+/* Hashtags */
+.hashtag-list{display:flex;flex-wrap:wrap;gap:5px}
+.hashtag-item{
+  font-size:10px;padding:3px 9px;border-radius:12px;
+  background:rgba(254,44,85,0.04);color:#e02d50;
+  border:1px solid rgba(254,44,85,0.10);
+  transition:all var(--transition-fast);cursor:pointer;
+}
+.hashtag-item:hover{background:rgba(254,44,85,0.10);border-color:rgba(254,44,85,0.20)}
+.hashtag-item.copied{background:rgba(16,185,129,0.12);border-color:rgba(16,185,129,0.30);color:#059669}
+
+/* Cover titles */
+.cover-list{display:flex;flex-direction:column;gap:5px}
+.cover-item{
+  font-size:11px;padding:6px 10px;border-radius:8px;
+  background:var(--bg-input);border:1px solid var(--border-light);
+  color:var(--text-secondary);line-height:1.5;cursor:pointer;
+  transition:all var(--transition-fast);
+}
+.cover-item:hover{background:var(--bg-card);border-color:var(--border-medium);color:var(--text-primary)}
+
+/* Export button */
+.export-btn{
+  width:100%;padding:8px 0;border:1px solid rgba(254,44,85,0.18);
+  border-radius:8px;background:rgba(254,44,85,0.03);
+  color:#e02d50;font-size:11px;font-weight:600;cursor:pointer;
+  transition:all var(--transition-fast);text-align:center;
+}
+.export-btn:hover{background:rgba(254,44,85,0.07);border-color:rgba(254,44,85,0.30);transform:scale(1.02);box-shadow:0 2px 10px rgba(254,44,85,0.06)}
+
+/* History */
+.history-section{margin-top:auto;padding:8px 0 18px;overflow-y:auto;max-height:42%;flex-shrink:0;border-top:1px solid rgba(120,100,180,0.05)}
+.history-section::-webkit-scrollbar{width:3px}
+.history-section::-webkit-scrollbar-track{background:transparent}
+.history-section::-webkit-scrollbar-thumb{background:rgba(120,100,180,0.08);border-radius:2px}
+.history-item{
+  font-size:10px;padding:6px 10px;margin-bottom:3px;
+  border-radius:6px;background:var(--bg-input);border:1px solid var(--border-light);
+  cursor:pointer;transition:all var(--transition-fast);
+  display:flex;justify-content:space-between;align-items:center;
+}
+.history-item:hover{background:var(--bg-card);border-color:var(--border-medium);transform:translateX(2px) scale(1.015);box-shadow:0 1px 6px rgba(120,100,180,0.05)}
+.history-time{color:var(--text-muted);font-size:9px}
+
+/* Report placeholder */
+.report-empty{text-align:center;padding:20px 0;font-size:11px;color:var(--text-muted);line-height:1.7}
+.report-empty-icon{font-size:30px;margin-bottom:6px;opacity:0.4}
+
+.stop-btn{flex:0 0 90px;background:linear-gradient(135deg,#6b7280,#9ca3af)!important;box-shadow:none!important;display:none}
+
+/* Header right */
+.header-right{display:flex;align-items:center;gap:6px;margin-left:auto}
+.model-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;font-size:10px;font-weight:600;border-radius:12px;border:1px solid var(--border-medium);background:var(--bg-input);color:var(--text-secondary);letter-spacing:0.03em;white-space:nowrap;transition:all var(--transition-fast)}
+.model-badge:hover{border-color:rgba(254,44,85,0.22);color:var(--accent);transform:scale(1.04);box-shadow:0 1px 8px rgba(254,44,85,0.06)}
+.model-badge-icon{font-size:12px}
+.example-btn{display:inline-flex;align-items:center;gap:3px;padding:3px 10px;font-size:10px;font-weight:600;border-radius:12px;border:1px dashed var(--border-medium);background:transparent;color:var(--text-secondary);cursor:pointer;letter-spacing:0.03em;white-space:nowrap;transition:all var(--transition-fast)}
+.example-btn:hover{border-color:rgba(254,44,85,0.25);color:var(--accent);background:rgba(254,44,85,0.03);transform:scale(1.04);box-shadow:0 1px 8px rgba(254,44,85,0.06)}
+
+/* Direction selection */
+.direction-section{margin-top:8px;padding-top:10px;border-top:1px solid rgba(120,100,180,0.06)}
+.direction-label{font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:8px;letter-spacing:0.06em;text-transform:uppercase}
+.direction-row{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
+.direction-chip{padding:6px 13px;font-size:11px;font-weight:500;border-radius:16px;border:1px solid var(--border-light);background:var(--bg-input);color:var(--text-secondary);cursor:pointer;transition:all var(--transition-fast);white-space:nowrap;user-select:none}
+.direction-chip:hover{border-color:var(--border-medium);background:var(--bg-card);transform:translateY(-1px) scale(1.03);box-shadow:0 2px 10px rgba(120,100,180,0.06)}
+.direction-chip.selected{background:rgba(254,44,85,0.07);border-color:rgba(254,44,85,0.28);color:#e02d50;box-shadow:0 0 10px rgba(254,44,85,0.06);transform:translateY(-1px)}
+.direction-confirm{padding:7px 20px;font-size:11px;font-weight:600;border-radius:10px;border:none;cursor:pointer;color:#fff;background:linear-gradient(135deg,#fe2c55,#ff4d6a);transition:all var(--transition-fast);box-shadow:0 2px 10px rgba(254,44,85,0.15)}
+.direction-confirm:hover:not(:disabled){transform:translateY(-1px) scale(1.03);box-shadow:0 4px 18px rgba(254,44,85,0.28),0 0 0 3px rgba(254,44,85,0.04)}
+.direction-confirm:disabled{opacity:0.4;cursor:not-allowed;transform:none;box-shadow:none}
+.step-next-bar{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:10px;padding-top:10px;border-top:1px solid rgba(120,100,180,0.06)}
+.step-next-btn{padding:6px 16px;font-size:10px;font-weight:600;border-radius:9px;border:1px solid rgba(16,185,129,0.20);background:rgba(16,185,129,0.05);color:#059669;cursor:pointer;transition:all var(--transition-fast)}
+.step-next-btn:hover{background:rgba(16,185,129,0.10);border-color:rgba(16,185,129,0.35);transform:translateY(-1px) scale(1.03);box-shadow:0 2px 8px rgba(16,185,129,0.08)}
+.step-finish-btn{padding:6px 16px;font-size:10px;font-weight:600;border-radius:9px;border:1px solid rgba(254,44,85,0.18);background:rgba(254,44,85,0.04);color:#e02d50;cursor:pointer;transition:all var(--transition-fast)}
+.step-finish-btn:hover{background:rgba(254,44,85,0.08);border-color:rgba(254,44,85,0.30);transform:translateY(-1px) scale(1.03);box-shadow:0 2px 8px rgba(254,44,85,0.08)}
+
+@keyframes card-in{from{opacity:0;transform:translateY(10px) scale(0.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+
+/* Responsive */
+@media(max-width:1300px){.panel-right{display:none}}
+@media(max-width:860px){.app-container{flex-direction:column;height:auto}.panel-left{flex:auto}.panel-center{min-height:400px}}
+</style>
+</head>
+<body>
+
+<div class="bg-layer"></div>
+
+<div class="app-container">
+
+  <!-- ===== LEFT: Input ===== -->
+  <div class="panel panel-left">
+    <div class="header" style="display:flex;align-items:center;width:100%">
+      <div class="header-brand">
+        <div class="header-logo">♪</div>
+        <div class="header-info">
+          <div class="header-title">抖音博主创作助手</div>
+          <div class="header-sub">Douyin Creator Studio</div>
+        </div>
+      </div>
+      <div class="header-right">
+        <button class="example-btn" onclick="fillExample()" title="填充示例并开始">💡 示例</button>
+        <span class="model-badge"><span class="model-badge-icon">🤖</span> DeepSeek</span>
+        <button class="theme-toggle" onclick="toggleTheme()" title="切换主题">🌓</button>
+      </div>
+    </div>
+
+    <div class="input-group">
+      <span class="section-label">📝 博主定位</span>
+      <textarea id="bloggerInfo" placeholder="描述你作为博主的定位、风格和目标受众...&#10;例：我是做美妆教程的博主，粉丝以18-25岁女性为主..."></textarea>
+    </div>
+
+    <div class="input-group">
+      <span class="section-label">🎬 主题方向（可选）</span>
+      <input type="text" id="topicHint" placeholder="留空则由 AI 自动推荐最佳方向">
+    </div>
+
+    <div>
+      <span class="section-label">🎭 脚本风格</span>
+      <div class="template-row" id="templateRow" style="margin-top:4px">
+        <span class="template-chip selected" data-tpl="">智能适配</span>
+        <span class="template-chip" data-tpl="tutorial">📚 教程</span>
+        <span class="template-chip" data-tpl="vlog">🎬 Vlog</span>
+        <span class="template-chip" data-tpl="review">📊 测评</span>
+        <span class="template-chip" data-tpl="story">🎤 口播</span>
+      </div>
+    </div>
+
+    <div class="keyword-module" id="keywordModule">
+      <div class="keyword-header"><span class="keyword-header-icon">🏷️</span><span class="keyword-header-text">关键词识别</span></div>
+      <div class="keyword-placeholder" id="keywordPlaceholder">输入博主信息后自动提取关键词</div>
+      <div class="keyword-list" id="keywordList"></div>
+    </div>
+
+    <!-- Topic reuse -->
+    <div class="topic-reuse" id="topicReuse">
+      <div class="topic-reuse-label">💡 切换选题重跑</div>
+      <div id="topicBtns"></div>
+    </div>
+
+    <div style="display:flex;gap:6px">
+      <button class="btn" id="runBtn" onclick="startStepWorkflow()" style="flex:1">
+        <span class="btn-shimmer"></span>✦ 开始创作
+      </button>
+      <button class="btn stop-btn" id="stopBtn" onclick="stopWorkflow()">⏹ 停止</button>
+    </div>
+
+    <!-- History (always visible) -->
+    <div class="history-section" id="historySection">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:4px">
+        <span class="section-label">📋 历史记录</span>
+        <button onclick="clearHistory()" style="font-size:10px;color:var(--text-muted);background:none;border:none;cursor:pointer;display:none" id="clearHistoryBtn">清空</button>
+      </div>
+      <div id="historyList"></div>
+      <div id="historyEmpty" style="font-size:10px;color:var(--text-muted);text-align:center;padding:8px 0;font-style:italic">暂无历史记录</div>
+    </div>
+  </div>
+
+  <!-- ===== CENTER: Workflow + Cards ===== -->
+  <div class="resize-handle" id="resizeLeft" title="拖拽调整左侧宽度"></div>
+  <div class="panel panel-center" id="centerPanel">
+    <div class="workflow" id="workflow">
+      <div class="wf-node" id="wf-strategist"><span class="wf-icon">🎯</span><span class="wf-label">策略分析</span><span class="wf-time"></span></div>
+      <span class="wf-arrow">→</span>
+      <div class="wf-node" id="wf-planner"><span class="wf-icon">🔥</span><span class="wf-label">选题策划</span><span class="wf-time"></span></div>
+      <span class="wf-arrow">→</span>
+      <div class="wf-node" id="wf-writer"><span class="wf-icon">✍️</span><span class="wf-label">脚本撰写</span><span class="wf-time"></span></div>
+      <span class="wf-arrow">→</span>
+      <div class="wf-node" id="wf-reviewer"><span class="wf-icon">🔍</span><span class="wf-label">质量审核</span><span class="wf-time"></span></div>
+    </div>
+    <div id="cardsContainer" style="display:flex;flex-direction:column;gap:7px"></div>
+  </div>
+
+  <!-- ===== RIGHT: Report ===== -->
+  <div class="resize-handle" id="resizeRight" title="拖拽调整右侧宽度"></div>
+  <div class="panel panel-right" id="reportPanel">
+    <div class="report-title">📊 创作报告</div>
+    <div class="report-empty" id="reportEmpty"><div class="report-empty-icon">📋</div>运行后将在此显示<br>质量评估与推荐内容</div>
+    <div id="reportContent" style="display:none;display:flex;flex-direction:column;gap:10px"></div>
+  </div>
+
+</div>
+
+<script>
+// ===== State =====
+const AGENTS = [
+  { id:'strategist', name:'🎯 内容策略分析师', icon:'🎯', step:'Step 1', wfId:'wf-strategist', arrowI:0 },
+  { id:'planner',    name:'🔥 爆款选题策划师', icon:'🔥', step:'Step 2', wfId:'wf-planner',    arrowI:1 },
+  { id:'writer',     name:'✍️ 短视频脚本写手',   icon:'✍️', step:'Step 3', wfId:'wf-writer',     arrowI:2 },
+  { id:'reviewer',   name:'🔍 内容质量审核员',   icon:'🔍', step:'Step 4', wfId:'wf-reviewer',   arrowI:3 },
+];
+const AGENT_NAME_MAP = Object.fromEntries(AGENTS.map(a => [a.name, a.id]));
+const cardMap = {};
+const agentContent = {};
+let finalOutput = '';
+let revisionCount = 0;
+let prevWriterOutput = '';
+let selectedTemplate = '';
+let topicList = [];
+let history = [];
+let abortController = null;
+let currentStep = -1, stepOutputs = {}, selectedDirection = '', workflowActive = false, currentSignal = null;
+
+// ===== Theme =====
+function toggleTheme() {
+  const html = document.documentElement;
+  const current = html.getAttribute('data-theme');
+  html.setAttribute('data-theme', current === 'dark' ? 'light' : 'dark');
+  localStorage.setItem('theme', html.getAttribute('data-theme'));
+}
+(function(){ const t = localStorage.getItem('theme')||'light'; document.documentElement.setAttribute('data-theme',t); })();
+
+// ===== Template =====
+document.getElementById('templateRow').addEventListener('click', e => {
+  const chip = e.target.closest('.template-chip');
+  if (!chip) return;
+  document.querySelectorAll('.template-chip').forEach(c => c.classList.remove('selected'));
+  chip.classList.add('selected');
+  selectedTemplate = chip.dataset.tpl;
+});
+
+// ===== History =====
+function loadHistory() {
+  try { history = JSON.parse(localStorage.getItem('creator_history') || '[]'); } catch(e) { history = []; }
+  renderHistory();
+}
+function saveHistory(input, topic) {
+  history.unshift({ input, topic, time: new Date().toLocaleString(), ts: Date.now() });
+  if (history.length > 10) history = history.slice(0, 10);
+  localStorage.setItem('creator_history', JSON.stringify(history));
+  renderHistory();
+}
+function renderHistory() {
+  const list = document.getElementById('historyList');
+  const empty = document.getElementById('historyEmpty');
+  const clearBtn = document.getElementById('clearHistoryBtn');
+  if (history.length === 0) {
+    list.innerHTML = '';
+    empty.style.display = 'block';
+    if (clearBtn) clearBtn.style.display = 'none';
+    return;
+  }
+  empty.style.display = 'none';
+  if (clearBtn) clearBtn.style.display = 'inline';
+  list.innerHTML = history.map((h, i) =>
+    `<div class="history-item" onclick="restoreHistory(${i})" title="${escapeHtml(h.input)}">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${escapeHtml(h.input.slice(0,30))}${h.input.length>30?'...':''}</span>
+      <span class="history-time">${h.time}</span>
+    </div>`
+  ).join('');
+}
+function restoreHistory(i) {
+  const h = history[i];
+  document.getElementById('bloggerInfo').value = h.input;
+  document.getElementById('topicHint').value = h.topic || '';
+  renderKeywords(extractKeywords(h.input));
+}
+function clearHistory() { history = []; localStorage.removeItem('creator_history'); renderHistory(); }
+function stopWorkflow() {
+  if (currentSignal) { currentSignal.abort(); currentSignal = null; }
+  if (abortController) { abortController.abort(); abortController = null; }
+  workflowActive = false;
+  currentStep = -1;
+  runBtn.disabled = false;
+  runBtn.innerHTML = '<span class="btn-shimmer"></span>✦ 开始创作';
+  stopBtn.style.display = 'none';
+}
+
+// ===== Init Cards =====
+function initCards() {
+  cardsContainer.innerHTML = '';
+  AGENTS.forEach(agent => {
+    const card = document.createElement('div');
+    card.className = 'card pending'; card.id = 'card-' + agent.id;
+    card.innerHTML = `
+      <div class="card-header" onclick="toggleCard('${agent.id}')">
+        <div class="card-icon">${agent.icon}</div>
+        <div class="card-title">${agent.name}</div>
+        <span class="card-step">${agent.step}</span>
+        <span class="card-status-row"><span class="card-badge badge-pending">待命中</span></span>
+        <span class="chevron">▾</span>
+      </div>
+      <div class="card-body"></div>
+      <div class="card-time"></div>
+    `;
+    cardsContainer.appendChild(card); cardMap[agent.id] = card;
+  });
+}
+function toggleCard(id) {
+  const card = document.getElementById('card-' + id);
+  if (card) card.classList.toggle('expanded');
+}
+
+function resetAll() {
+  currentStep = -1; stepOutputs = {}; selectedDirection = ''; workflowActive = false;
+  if (currentSignal) { currentSignal.abort(); currentSignal = null; }
+  AGENTS.forEach(agent => {
+    const card = cardMap[agent.id]; if (!card) return;
+    card.className = 'card pending';
+    card.querySelector('.card-badge').className = 'card-badge badge-pending';
+    card.querySelector('.card-badge').textContent = '待命中';
+    card.querySelector('.card-body').textContent = '';
+    card.querySelector('.card-time').textContent = '';
+    const dots = card.querySelector('.loading-dots'); if (dots) dots.remove();
+    card.classList.remove('expanded');
+  });
+  document.querySelectorAll('.wf-node').forEach(n => { n.className = 'wf-node'; n.querySelector('.wf-time').textContent = ''; });
+  document.querySelectorAll('.wf-arrow').forEach(n => n.classList.remove('flowing'));
+  Object.keys(agentContent).forEach(k => delete agentContent[k]);
+  finalOutput = ''; revisionCount = 0; prevWriterOutput = ''; topicList = [];
+  document.getElementById('topicReuse').classList.remove('show');
+  document.getElementById('topicBtns').innerHTML = '';
+  const f = document.getElementById('finalCard'); if (f) f.remove();
+  const d = document.querySelectorAll('.diff-card'); d.forEach(e => e.remove());
+  document.getElementById('reportEmpty').style.display = 'block';
+  document.getElementById('reportContent').style.display = 'none';
+  document.getElementById('reportContent').innerHTML = '';
+}
+
+// ===== Workflow =====
+function setWfState(id, state, elapsed) {
+  const agent = AGENTS.find(a => a.id === id); if (!agent) return;
+  const node = document.getElementById(agent.wfId); if (!node) return;
+  node.className = 'wf-node ' + (state === 'working' ? 'active' : state === 'done' ? 'done' : '');
+  if (elapsed) node.querySelector('.wf-time').textContent = (elapsed/1000).toFixed(1) + 's';
+}
+function setArrowFlow(idx, flowing) {
+  const arrows = document.querySelectorAll('.wf-arrow');
+  if (arrows[idx]) arrows[idx].classList.toggle('flowing', flowing);
+}
+
+// ===== Card Update =====
+function updateCardById(id, data) {
+  const card = cardMap[id]; if (!card) return;
+  const badge = card.querySelector('.card-badge');
+  const body = card.querySelector('.card-body');
+  const timeEl = card.querySelector('.card-time');
+
+  if (data.stage === 'working') {
+    card.className = 'card active';
+    badge.className = 'card-badge badge-working'; badge.textContent = '工作中';
+    setWfState(id, 'working');
+    const idx = AGENTS.findIndex(a => a.id === id);
+    if (idx > 0) setArrowFlow(idx - 1, true);
+    if (!card.querySelector('.loading-dots')) {
+      const dots = document.createElement('span'); dots.className = 'loading-dots';
+      dots.innerHTML = '<span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>';
+      badge.after(dots);
+    }
+  } else if (data.stage === 'done') {
+    card.className = 'card done';
+    badge.className = 'card-badge badge-done'; badge.textContent = '✓ 完成';
+    const elapsed = data.elapsed_ms;
+    setWfState(id, 'done', elapsed);
+    const idx = AGENTS.findIndex(a => a.id === id);
+    if (idx >= 0) setArrowFlow(idx, false);
+    const dots = card.querySelector('.loading-dots'); if (dots) dots.remove();
+    if (timeEl && elapsed) timeEl.textContent = '⏱ ' + (elapsed/1000).toFixed(1) + 's';
+    if (body && data.output) { body.textContent = data.output; agentContent[id] = data.output; }
+    card.classList.add('expanded');
+    card.scrollIntoView({ behavior:'smooth', block:'nearest' });
+
+    // Topic list from planner
+    if (id === 'planner') handlePlannerOutput(data.output);
+    // Report when reviewer done
+    if (id === 'reviewer') updateReportScore(data.output);
+    // Version diff for revision
+    if (data.revision && id === 'writer') {
+      if (prevWriterOutput) addDiffCard(prevWriterOutput, data.output);
+      prevWriterOutput = data.output;
+    }
+  } else if (data.stage === 'pass') {
+    const rCard = cardMap['reviewer']; if (!rCard) return;
+    rCard.className = 'card pass';
+    rCard.querySelector('.card-badge').className = 'card-badge badge-pass';
+    rCard.querySelector('.card-badge').textContent = '✓ 通过';
+    setWfState('reviewer', 'done');
+    const rDots = rCard.querySelector('.loading-dots'); if (rDots) rDots.remove();
+    rCard.querySelector('.card-body').textContent = data.output || '';
+    rCard.classList.add('expanded');
+    if (data.score) updateReportPass(data);
+  } else if (data.stage === 'revising') {
+    card.className = 'card active';
+    badge.className = 'card-badge badge-working'; badge.textContent = '修改中';
+    if (!card.querySelector('.loading-dots')) {
+      const dots = document.createElement('span'); dots.className = 'loading-dots';
+      dots.innerHTML = '<span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>';
+      badge.after(dots);
+    }
+    if (body) body.textContent = data.output || '';
+  }
+
+  // Handle topic event from planner
+  if (data.topics && data.topics.length > 0) {
+    topicList = data.topics;
+    renderTopicButtons(data.topics);
+  }
+}
+
+// ===== Topics Reuse =====
+function handlePlannerOutput(text) {
+  const topics = extractTopics(text);
+  if (topics.length > 0) { topicList = topics; renderTopicButtons(topics); }
+}
+function extractTopics(text) {
+  const topics = [];
+  const patterns = [/选题\d[：:]\s*(.+?)(?:\n|$)/g, /标题[：:]\s*(.+?)(?:\n|$)/g, /^\d+[\.\、]\s*(.+?)$/gm];
+  for (const pat of patterns) {
+    const m = [...text.matchAll(pat)];
+    topics.push(...m.map(x => (x[1]||x[0]).trim()).filter(t => t.length >= 4 && t.length <= 60));
+    if (topics.length >= 3) break;
+  }
+  return [...new Set(topics)].slice(0, 3);
+}
+function renderTopicButtons(topics) {
+  const reuse = document.getElementById('topicReuse');
+  const btns = document.getElementById('topicBtns');
+  if (!topics || topics.length < 2) { reuse.classList.remove('show'); return; }
+  btns.innerHTML = topics.map((t, i) =>
+    `<button class="topic-btn" onclick="reRunWithTopic('${escapeAttr(t)}')"><span class="topic-num">#${i+1}</span>${escapeHtml(t)}</button>`
+  ).join('');
+  reuse.classList.add('show');
+}
+function reRunWithTopic(topic) {
+  document.getElementById('topicHint').value = topic;
+  startWorkflow();
+}
+
+// ===== Version Diff =====
+function addDiffCard(before, after) {
+  const short = (s) => (s||'').slice(0, 300) + ((s||'').length > 300 ? '...' : '');
+  const diffDiv = document.createElement('div');
+  diffDiv.className = 'diff-card expanded';
+  diffDiv.innerHTML = `
+    <div class="diff-header" onclick="this.parentElement.classList.toggle('expanded')">
+      <span>🔄</span><span class="diff-title">修改对比（第 ${revisionCount} 轮修订）</span>
+      <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">▾</span>
+    </div>
+    <div class="diff-body">
+      <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin-bottom:4px">📝 修改前</div>
+      <div class="diff-content">${escapeHtml(short(before))}</div>
+      <div style="font-size:10px;font-weight:700;color:var(--text-muted);margin:8px 0 4px">✨ 修改后</div>
+      <div class="diff-content">${escapeHtml(short(after))}</div>
+    </div>`;
+  cardsContainer.appendChild(diffDiv);
+  diffDiv.scrollIntoView({ behavior:'smooth' });
+}
+
+// ===== Report =====
+function parseScores(text) {
+  const dims = ['钩子强度','节奏控制','情绪曲线','转化设计','人设匹配度'];
+  const scores = {};
+  for (const dim of dims) {
+    let re = new RegExp(dim + '[\\s\\S]*?([1-9]|10)\\s*分', 'i');
+    let m = text.match(re);
+    if (!m) { re = new RegExp(dim + '\\s*[：:]?\\s*(\\d+)', 'i'); m = text.match(re); }
+    if (m) scores[dim] = parseInt(m[1]);
+  }
+  const ov = text.match(/综合评分\s*[：:]?\s*(\d+)/);
+  if (ov) scores['overall'] = parseInt(ov[1]);
+  scores['isPass'] = /PASS/i.test(text) || (scores['overall'] || 0) >= 7;
+  return scores;
+}
+
+function updateReportScore(text) {
+  document.getElementById('reportEmpty').style.display = 'none';
+  const rc = document.getElementById('reportContent');
+  rc.style.display = 'flex';
+  const scores = parseScores(text);
+  let barsHtml = '';
+  for (const dim of ['钩子强度','节奏控制','情绪曲线','转化设计','人设匹配度']) {
+    const v = scores[dim] || 0;
+    barsHtml += `<div class="score-row"><span class="score-label">${dim}</span><div class="score-bar-bg"><div class="score-bar-fill" style="width:${v*10}%"></div></div><span class="score-val">${v}</span></div>`;
+  }
+  const overall = scores['overall'] || '—';
+  const isPass = scores['isPass'];
+  rc.innerHTML = `
+    <div class="report-section">
+      <div class="report-section-label">📈 五维评分</div>${barsHtml}
+      <div class="overall-score">
+        <div class="score-circle ${isPass?'':'revise'}">${overall}</div>
+        <div><div class="score-verdict ${isPass?'':'revise'}">${isPass?'✅ 达标':'⚠️ 需修改'}</div>
+        <div style="font-size:9px;color:var(--text-muted)">综合评分</div></div>
+      </div>
+    </div>
+    <div class="report-section">
+      <div class="report-section-label">📋 工作流统计</div>
+      <div class="stat-row"><span class="stat-label">策略分析</span><span class="stat-val">✓ 完成</span></div>
+      <div class="stat-row"><span class="stat-label">选题策划</span><span class="stat-val">✓ 完成</span></div>
+      <div class="stat-row"><span class="stat-label">脚本撰写</span><span class="stat-val">✓ 完成</span></div>
+      <div class="stat-row"><span class="stat-label">质量审核</span><span class="stat-val">${isPass?'✓ 通过':'⚠ 修改中'}</span></div>
+    </div>`;
+}
+
+function updateReportPass(data) {
+  document.getElementById('reportEmpty').style.display = 'none';
+  const rc = document.getElementById('reportContent');
+  rc.style.display = 'flex';
+  // Update stat
+  const statSec = rc.querySelector('.report-section:nth-child(2)');
+  if (statSec) {
+    statSec.innerHTML = `
+      <div class="report-section-label">📋 工作流统计</div>
+      <div class="stat-row"><span class="stat-label">策略分析</span><span class="stat-val">✓ 完成</span></div>
+      <div class="stat-row"><span class="stat-label">选题策划</span><span class="stat-val">✓ 完成</span></div>
+      <div class="stat-row"><span class="stat-label">脚本撰写</span><span class="stat-val">✓ 完成</span></div>
+      <div class="stat-row"><span class="stat-label">质量审核</span><span class="stat-val" style="color:#059669">✓ 通过</span></div>
+      <div class="stat-row"><span class="stat-label">修改轮次</span><span class="stat-val">${data.revision_count||0} 轮</span></div>
+    `;
+  }
+}
+
+function updateReportFinal() {
+  document.getElementById('reportEmpty').style.display = 'none';
+  const rc = document.getElementById('reportContent');
+  rc.style.display = 'flex';
+
+  // Hashtags
+  const allText = (agentContent['strategist']||'') + (agentContent['writer']||'') + finalOutput;
+  const hashtags = generateHashtags(allText, document.getElementById('bloggerInfo').value);
+  const hashtagHtml = `<div class="hashtag-list">${hashtags.map(h =>
+    `<span class="hashtag-item" onclick="copyHashtag(this,'${escapeAttr(h)}')">#${escapeHtml(h)}</span>`
+  ).join('')}</div>`;
+
+  // Cover titles
+  const covers = generateCoverTitles(allText);
+  const coverHtml = `<div class="cover-list">${covers.map(c =>
+    `<div class="cover-item" onclick="copyText(this)">${escapeHtml(c)}</div>`
+  ).join('')}</div>`;
+
+  rc.innerHTML += `
+    <div class="report-section">
+      <div class="report-section-label">🏷️ 推荐话题标签</div>${hashtagHtml}
+      <div style="font-size:9px;color:var(--text-muted);margin-top:6px">点击标签复制</div>
+    </div>
+    <div class="report-section">
+      <div class="report-section-label">🖼️ 封面标题建议</div>${coverHtml}
+      <div style="font-size:9px;color:var(--text-muted);margin-top:4px">点击标题复制</div>
+    </div>
+    <button class="export-btn" onclick="exportScript()">📥 导出完整脚本 (.md)</button>
+  `;
+  rc.scrollTop = rc.scrollHeight;
+}
+
+// ===== Hashtags =====
+function generateHashtags(allText, userInput) {
+  const tags = new Set();
+  const commonTags = {
+    '美妆':['美妆教程','化妆技巧','美妆分享','素颜蜕变'],
+    '护肤':['护肤干货','护肤routine','皮肤管理','变美'],
+    '穿搭':['ootd','穿搭灵感','穿搭技巧','今日穿搭'],
+    '美食':['美食分享','美食探店','吃货日常','治愈美食'],
+    '健身':['健身日常','健身干货','减脂','自律'],
+    '旅行':['旅行vlog','旅行攻略','打卡','治愈系风景'],
+    'vlog':['日常vlog','生活记录','治愈系','慢生活'],
+    '测评':['真实测评','好物分享','种草','避坑'],
+    '教程':['教程分享','手把手教学','干货满满','新手必看'],
+    '搞笑':['搞笑日常','沙雕','哈哈哈哈','笑死'],
+    '情感':['情感共鸣','扎心','人间清醒','情绪价值'],
+  };
+  for (const [kw, tgs] of Object.entries(commonTags)) {
+    if (allText.includes(kw) || userInput.includes(kw)) tgs.forEach(t => tags.add(t));
+  }
+  // Always add some universal tags
+  const universal = ['抖音创作','短视频','内容创作','上热门','douyin'];
+  universal.forEach(t => tags.add(t));
+  return [...tags].slice(0, 10);
+}
+
+// ===== Cover Titles =====
+function generateCoverTitles(allText) {
+  const titles = [];
+  // Try to extract from writer output
+  const titleMatch = allText.match(/标题[选项\d]*[：:]\s*(.+?)(?:\n|$)/g);
+  if (titleMatch) {
+    titleMatch.forEach(m => {
+      const t = m.replace(/标题[选项\d]*[：:]\s*/, '').trim();
+      if (t.length > 3 && t.length < 80) titles.push(t);
+    });
+  }
+  // Fallback: generate from keywords
+  while (titles.length < 5) {
+    const seed = ['手把手教你','一学就会','别再','绝绝子','原来','宝藏','亲测','干货满满','99%的人不知道','保姆级','无限回购','后悔没早做'];
+    const suffix = ['！🔥','✨','💯','！建议收藏','～绝了'];
+    const kw = extractKeywords(allText);
+    const w = kw[Math.floor(Math.random()*kw.length)] || '这个';
+    const s = seed[Math.floor(Math.random()*seed.length)];
+    const sf = suffix[Math.floor(Math.random()*suffix.length)];
+    titles.push(s + w + sf);
+  }
+  return [...new Set(titles)].slice(0, 5);
+}
+
+function copyHashtag(el, tag) {
+  navigator.clipboard.writeText('#' + tag).then(() => {
+    el.classList.add('copied');
+    setTimeout(() => el.classList.remove('copied'), 1500);
+  });
+}
+function copyText(el) {
+  navigator.clipboard.writeText(el.textContent).then(() => {
+    const orig = el.textContent;
+    el.textContent = '✓ 已复制!';
+    setTimeout(() => { el.textContent = orig; }, 1500);
+  });
+}
+
+// ===== Export =====
+function exportScript() {
+  let md = '# 抖音博主创作脚本\n\n';
+  md += '## 博主画像\n' + (agentContent['strategist']||'—') + '\n\n';
+  md += '## 选题方案\n' + (agentContent['planner']||'—') + '\n\n';
+  md += '## 拍摄脚本\n' + (agentContent['writer']||finalOutput||'—') + '\n\n';
+  md += '## 质量审核\n' + (agentContent['reviewer']||'—') + '\n\n';
+  md += '---\n*由 AI 创作助手生成*';
+  const blob = new Blob([md], {type:'text/markdown;charset=utf-8'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = '抖音脚本_' + new Date().toISOString().slice(0,10) + '.md';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+// ===== Keywords =====
+const CATEGORY_KW = ['美妆','护肤','彩妆','穿搭','时尚','发型','美食','做饭','烘焙','探店','零食','健身','减肥','瑜伽','运动','跑步','旅行','出游','民宿','打卡','景点','母婴','育儿','宝宝','亲子','孕期','科技','数码','手机','电脑','游戏','学习','读书','英语','教育','职场','情感','恋爱','婚姻','心理','成长','搞笑','段子','日常','vlog','生活','宠物','猫','狗','萌宠','家居','装修','收纳','好物','测评','音乐','舞蹈','绘画','手工','摄影'];
+const AUDIENCE_KW = ['学生','上班族','宝妈','职场新人','大学生','女生','男生','女性','男性','00后','90后','80后','95后','85后','新手','小白','进阶','专业'];
+function extractKeywords(text) {
+  if (!text || text.trim().length < 3) return [];
+  const found = new Set();
+  for (const kw of CATEGORY_KW) { if (text.includes(kw)) found.add(kw); }
+  for (const kw of AUDIENCE_KW) { if (text.includes(kw)) found.add(kw); }
+  const am = text.match(/\d{1,2}[-~至到]\d{1,2}\s*岁/g); if (am) am.forEach(m => found.add(m));
+  for (const p of ['抖音','小红书','B站','快手','微博','视频号','公众号']) { if (text.includes(p)) found.add(p); }
+  return [...found].slice(0, 10);
+}
+function renderKeywords(kws) {
+  keywordList.innerHTML = '';
+  if (kws.length === 0) { keywordModule.classList.remove('has-keywords'); keywordPlaceholder.style.display = 'block'; return; }
+  keywordModule.classList.add('has-keywords'); keywordPlaceholder.style.display = 'none';
+  kws.forEach((kw,i) => {
+    const tag = document.createElement('span'); tag.className = 'keyword-tag';
+    tag.style.animationDelay = `${i*0.06}s`; tag.textContent = kw;
+    keywordList.appendChild(tag);
+  });
+}
+document.getElementById('bloggerInfo').addEventListener('input', () => renderKeywords(extractKeywords(bloggerInfo.value)));
+document.getElementById('topicHint').addEventListener('input', () => renderKeywords(extractKeywords(bloggerInfo.value + ' ' + topicHint.value)));
+
+// ===== SSE =====
+async function startWorkflow() {
+  const input = bloggerInfo.value.trim(); if (!input) return;
+  saveHistory(input, topicHint.value.trim());
+  resetAll();
+  runBtn.disabled = true; runBtn.textContent = '⏳ 团队工作中...';
+  stopBtn.style.display = 'block';
+  abortController = new AbortController();
+
+  try {
+    const resp = await fetch('/api/run', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({ user_input: input, selected_topic: topicHint.value.trim(), template: selectedTemplate }),
+      signal: abortController.signal
+    });
+    const reader = resp.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      buffer += decoder.decode(value, {stream:true});
+      const lines = buffer.split('\n'); buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = JSON.parse(line.slice(6));
+
+        if (data.stage === 'final') {
+          finalOutput = data.output || '';
+          revisionCount = data.revision_count || 0;
+          updateReportFinal();
+          const preview = (data.output||'').slice(0,180).replace(/\n/g,' ');
+          const fc = document.createElement('div');
+          fc.className = 'final-card expanded'; fc.id = 'finalCard';
+          fc.innerHTML = `
+            <div class="final-header" onclick="this.parentElement.classList.toggle('expanded')">
+              <span class="final-header-icon">✨</span><span class="final-header-title">全部完成 — 最终脚本</span>
+              <span class="final-header-badge">可收起</span><span class="final-chevron">▾</span>
+            </div>
+            <div class="final-body"><div class="final-content">${escapeHtml(data.output)}</div></div>`;
+          cardsContainer.appendChild(fc);
+          fc.scrollIntoView({ behavior:'smooth' });
+          continue;
+        }
+        if (data.stage === 'pass') { updateCardById('reviewer', data); continue; }
+        if (data.stage === 'revising') { revisionCount++; continue; }
+        if (data.stage === 'topics' && data.topics) { topicList = data.topics; renderTopicButtons(data.topics); continue; }
+        const id = AGENT_NAME_MAP[data.agent];
+        if (id) updateCardById(id, data);
+      }
+    }
+  } catch(err) {
+    if (err.name === 'AbortError') {
+      // User clicked stop — clean exit
+      const c = cardMap['reviewer']; if (c) { c.querySelector('.card-badge').textContent = '已停止'; c.querySelector('.card-body').textContent = '⏹ 用户手动停止创作流程'; c.classList.add('expanded'); }
+    } else {
+      const c = cardMap['reviewer']; if (c) { c.querySelector('.card-badge').textContent = '连接错误'; c.querySelector('.card-body').textContent = '❌ '+err.message; c.classList.add('expanded'); }
+    }
+  } finally {
+    runBtn.disabled = false; runBtn.innerHTML = '<span class="btn-shimmer"></span>✦ 开始创作';
+    stopBtn.style.display = 'none';
+    abortController = null;
+  }
+}
+
+function escapeHtml(t) { const d = document.createElement('div'); d.textContent = t; return d.innerHTML; }
+function escapeAttr(t) { return t.replace(/'/g,"\\'").replace(/"/g,'&quot;'); }
+
+// ===== Step-by-Step Workflow =====
+function fillExample() {
+  document.getElementById('bloggerInfo').value = '我是做美妆教程的博主，粉丝以18-25岁女性为主，主打实用干货，想在抖音和小红书分享护肤美妆知识';
+  document.getElementById('topicHint').value = '';
+  renderKeywords(extractKeywords(bloggerInfo.value));
+  const btn = document.getElementById('runBtn');
+  btn.style.animation = 'none'; btn.offsetHeight;
+  btn.style.animation = 'card-breathe 0.6s ease-in-out 3';
+}
+
+async function startStepWorkflow() {
+  const input = bloggerInfo.value.trim(); if (!input) return;
+  saveHistory(input, topicHint.value.trim());
+  resetAll();
+  workflowActive = true;
+  currentStep = 0;
+  stepOutputs = {};
+  runBtn.disabled = true; runBtn.textContent = '⏳ 逐步创作中...';
+  stopBtn.style.display = 'block';
+  // Load directions from API
+  showDirectionUI('strategist');
+}
+
+function showDirectionUI(agentId) {
+  const card = cardMap[agentId]; if (!card) return;
+  card.className = 'card active';
+  const badge = card.querySelector('.card-badge'); badge.className = 'card-badge badge-working'; badge.textContent = '选择方向';
+  const dots = card.querySelector('.loading-dots'); if (!dots) {
+    const d = document.createElement('span'); d.className = 'loading-dots';
+    d.innerHTML = '<span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>';
+    badge.after(d);
+  }
+  setWfState(agentId, 'working');
+  const idx = AGENTS.findIndex(a => a.id === agentId);
+  if (idx > 0) setArrowFlow(idx - 1, true);
+
+  let directions = [];
+  let label = '';
+  if (agentId === 'strategist') {
+    directions = ['情感共鸣型','知识干货型','娱乐搞笑型','种草带货型','观点输出型'];
+    label = '请选择内容风格方向：';
+  } else if (agentId === 'planner') {
+    directions = ['热点借势','痛点解决','反差对比','教程拆解','故事叙事'];
+    label = '请选择选题切入方式：';
+  } else if (agentId === 'writer') {
+    directions = topicList.length > 0 ? topicList : ['（暂无选题，将自动生成）'];
+    label = '请选择要撰写的选题：';
+  }
+  const chipsHtml = directions.map(d =>
+    `<span class="direction-chip" data-dir="${escapeAttr(d)}" onclick="selectDirection(this,'${escapeAttr(d)}')">${escapeHtml(d)}</span>`
+  ).join('');
+  const body = card.querySelector('.card-body');
+  body.innerHTML = `<div class="direction-section"><div class="direction-label">${label}</div><div class="direction-row">${chipsHtml}</div><button class="direction-confirm" id="confirm-${agentId}" disabled onclick="confirmDirection('${agentId}')">确认，开始${agentId==='writer'?'撰写':'分析'}</button></div>`;
+  body.style.cssText = '';  // Clear any prior inline styles so CSS classes work
+  selectedDirection = '';
+  card.classList.add('expanded');
+  card.scrollIntoView({ behavior:'smooth', block:'nearest' });
+}
+
+function selectDirection(chipEl, direction) {
+  const card = chipEl.closest('.card');
+  card.querySelectorAll('.direction-chip').forEach(c => c.classList.remove('selected'));
+  chipEl.classList.add('selected');
+  selectedDirection = direction;
+  const confirmBtn = card.querySelector('.direction-confirm');
+  if (confirmBtn) confirmBtn.disabled = false;
+}
+
+async function confirmDirection(agentId) {
+  if (!selectedDirection) return;
+  if (workflowActive !== true) return;
+  const card = cardMap[agentId];
+  const body = card.querySelector('.card-body');
+  body.innerHTML = '';
+  const badge = card.querySelector('.card-badge'); badge.textContent = '工作中'; badge.className = 'card-badge badge-working';
+  const dots = card.querySelector('.loading-dots');
+  if (!dots) { const d = document.createElement('span'); d.className = 'loading-dots'; d.innerHTML = '<span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>'; badge.after(d); }
+  await runStepSSE(agentId, selectedDirection);
+}
+
+async function runStepSSE(agentId, direction) {
+  const input = bloggerInfo.value.trim();
+  currentSignal = new AbortController();
+  const stepMap = { strategist:'strategist', planner:'planner', writer:'writer', reviewer:'reviewer' };
+  const body = {
+    user_input: input,
+    step: stepMap[agentId],
+    direction: agentId === 'writer' ? '' : direction,
+    selected_topic: agentId === 'writer' ? direction : (topicHint.value.trim() || direction),
+    strategist_output: stepOutputs['strategist'] || '',
+    planner_output: stepOutputs['planner'] || '',
+    writer_output: stepOutputs['writer'] || '',
+    template: selectedTemplate,
+  };
+  try {
+    const resp = await fetch('/api/run-step', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body), signal: currentSignal.signal });
+    const reader = resp.body.getReader(); const decoder = new TextDecoder(); let buffer = '';
+    while (true) {
+      const { done, value } = await reader.read(); if (done) break;
+      buffer += decoder.decode(value, {stream:true});
+      const lines = buffer.split('\n'); buffer = lines.pop() || '';
+      for (const line of lines) {
+        if (!line.startsWith('data: ')) continue;
+        const data = JSON.parse(line.slice(6));
+        if (data.stage === 'error') {
+          const c = cardMap[agentId]; if (c) { c.querySelector('.card-badge').textContent = '错误'; c.querySelector('.card-badge').className = 'card-badge badge-working'; c.querySelector('.card-body').textContent = '❌ '+data.output; }
+          workflowActive = false; runBtn.disabled = false; runBtn.innerHTML = '<span class="btn-shimmer"></span>✦ 开始创作'; stopBtn.style.display = 'none'; return;
+        }
+        if (data.stage === 'complete') {
+          if (!workflowActive) return;
+          const next = { strategist:'planner', planner:'writer', writer:'reviewer', reviewer:null }[agentId];
+          if (next) {
+            await new Promise(r => setTimeout(r, 1500));
+            if (!workflowActive) return;
+            advanceToStep(next);
+          } else {
+            await new Promise(r => setTimeout(r, 800));
+            if (!workflowActive) return;
+            finishWorkflow();
+          }
+          return;
+        }
+        const id = AGENT_NAME_MAP[data.agent];
+        if (id) {
+          updateCardForStep(id, data);
+          if (data.stage === 'done' && data.output) {
+            stepOutputs[id] = data.output;
+            const card = cardMap[id]; if (card) addStepNav(id, card.querySelector('.card-body'));
+            if (id === 'writer') stepOutputs['selected_topic'] = direction;
+          }
+        }
+        if (data.stage === 'topics' && data.topics) { topicList = data.topics; renderTopicButtons(data.topics); }
+      }
+    }
+  } catch(err) {
+    if (err.name === 'AbortError') return;
+    const c = cardMap[agentId]; if (c) { c.querySelector('.card-badge').textContent = '连接错误'; c.querySelector('.card-body').textContent = '❌ '+err.message; }
+    workflowActive = false; runBtn.disabled = false; runBtn.innerHTML = '<span class="btn-shimmer"></span>✦ 开始创作'; stopBtn.style.display = 'none';
+  } finally { currentSignal = null; }
+}
+
+function updateCardForStep(id, data) {
+  const card = cardMap[id]; if (!card) return;
+  const badge = card.querySelector('.card-badge');
+  const body = card.querySelector('.card-body');
+  const timeEl = card.querySelector('.card-time');
+  if (data.stage === 'working') {
+    card.className = 'card active';
+    badge.className = 'card-badge badge-working'; badge.textContent = '工作中';
+    setWfState(id, 'working');
+    const idx = AGENTS.findIndex(a => a.id === id);
+    if (idx > 0) setArrowFlow(idx - 1, true);
+  } else if (data.stage === 'done') {
+    card.className = 'card done';
+    badge.className = 'card-badge badge-done'; badge.textContent = '✓ 完成';
+    const elapsed = data.elapsed_ms;
+    setWfState(id, 'done', elapsed);
+    const idx = AGENTS.findIndex(a => a.id === id);
+    if (idx >= 0) setArrowFlow(idx, false);
+    const dots = card.querySelector('.loading-dots'); if (dots) dots.remove();
+    if (timeEl && elapsed) timeEl.textContent = '⏱ ' + (elapsed/1000).toFixed(1) + 's';
+    if (body && data.output) { body.textContent = data.output; agentContent[id] = data.output; }
+    card.classList.add('expanded');
+    card.scrollIntoView({ behavior:'smooth', block:'nearest' });
+    if (id === 'reviewer') updateReportScore(data.output);
+    if (id === 'planner' && data.output) handlePlannerOutput(data.output);
+  }
+}
+
+function addStepNav(agentId, bodyEl) {
+  const nextMap = { strategist:{next:'planner',label:'确认策略分析，进入选题策划 →',cls:'step-next-btn'}, planner:{next:'writer',label:'确认选题方案，进入脚本撰写 →',cls:'step-next-btn'}, writer:{next:'reviewer',label:'确认脚本，进入质量审核 →',cls:'step-next-btn'}, reviewer:{next:null,label:'✅ 全部完成 — 查看最终报告',cls:'step-finish-btn'} };
+  const info = nextMap[agentId]; if (!info) return;
+  const bar = document.createElement('div'); bar.className = 'step-next-bar';
+  bar.innerHTML = `<button class="${info.cls}" onclick="${info.next ? "advanceToStep('"+info.next+"')" : 'finishWorkflow()'}">${info.label}</button>`;
+  bodyEl.appendChild(bar);
+}
+
+function advanceToStep(nextAgentId) {
+  if (!workflowActive) return;
+  if (nextAgentId === 'planner') { currentStep = 1; showDirectionUI('planner'); }
+  else if (nextAgentId === 'writer') {
+    currentStep = 2;
+    if (stepOutputs['planner']) { topicList = extractTopics(stepOutputs['planner']); }
+    if (topicList.length === 0) topicList = [topicHint.value.trim() || '推荐选题'];
+    showDirectionUI('writer');
+  } else if (nextAgentId === 'reviewer') {
+    currentStep = 3;
+    const card = cardMap['reviewer']; if (!card) return;
+    card.className = 'card active';
+    const badge = card.querySelector('.card-badge'); badge.textContent = '工作中'; badge.className = 'card-badge badge-working';
+    if (!card.querySelector('.loading-dots')) { const d = document.createElement('span'); d.className = 'loading-dots'; d.innerHTML = '<span class="loading-dot"></span><span class="loading-dot"></span><span class="loading-dot"></span>'; badge.after(d); }
+    setWfState('reviewer', 'working');
+    const idx = AGENTS.findIndex(a => a.id === 'reviewer');
+    if (idx > 0) setArrowFlow(idx - 1, true);
+    runStepSSE('reviewer', '');
+  }
+}
+
+function finishWorkflow() {
+  if (!workflowActive) return;
+  workflowActive = false; currentStep = -1;
+  runBtn.disabled = false; runBtn.innerHTML = '<span class="btn-shimmer"></span>✦ 开始创作'; stopBtn.style.display = 'none';
+  const writerOut = stepOutputs['writer'] || '';
+  const reviewerOut = stepOutputs['reviewer'] || '';
+  finalOutput = writerOut;
+  const oldFc = document.getElementById('finalCard'); if (oldFc) oldFc.remove();
+  const fc = document.createElement('div'); fc.className = 'final-card expanded'; fc.id = 'finalCard';
+  fc.innerHTML = `<div class="final-header" onclick="this.parentElement.classList.toggle('expanded')"><span class="final-header-icon">✨</span><span class="final-header-title">全部完成 — 最终脚本</span><span class="final-header-badge">可收起</span><span class="final-chevron">▾</span></div><div class="final-body"><div class="final-content">${escapeHtml(writerOut)}</div></div>`;
+  cardsContainer.appendChild(fc); fc.scrollIntoView({ behavior:'smooth' });
+  const rCard = cardMap['reviewer']; if (rCard) {
+    rCard.className = 'card pass';
+    const b = rCard.querySelector('.card-badge'); if (b) { b.className = 'card-badge badge-pass'; b.textContent = '✓ 通过'; }
+    const rd = rCard.querySelector('.loading-dots'); if (rd) rd.remove();
+  }
+  setWfState('reviewer', 'done');
+  if (reviewerOut) updateReportScore(reviewerOut);
+  updateReportFinal();
+}
+
+document.addEventListener('keydown', e => { if ((e.ctrlKey||e.metaKey) && e.key==='Enter') { e.preventDefault(); startStepWorkflow(); } });
+initCards(); loadHistory();
+
+// ===== Resizable Panels =====
+(function(){
+  const KEY = 'panel_widths';
+  let saved = {};
+  try { saved = JSON.parse(localStorage.getItem(KEY) || '{}'); } catch(e) {}
+  const root = document.documentElement;
+  const leftW = saved.leftW || 330;
+  const rightW = saved.rightW || 310;
+  root.style.setProperty('--left-width', leftW + 'px');
+  root.style.setProperty('--right-width', rightW + 'px');
+
+  const leftHandle = document.getElementById('resizeLeft');
+  const rightHandle = document.getElementById('resizeRight');
+  const appContainer = document.querySelector('.app-container');
+  let dragging = null;
+
+  function onDown(e, side) {
+    e.preventDefault();
+    dragging = { side, startX: e.clientX };
+    const h = e.target.closest('.resize-handle');
+    if (h) h.classList.add('active');
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  }
+
+  leftHandle.addEventListener('mousedown', e => onDown(e, 'left'));
+  rightHandle.addEventListener('mousedown', e => onDown(e, 'right'));
+
+  document.addEventListener('mousemove', e => {
+    if (!dragging) return;
+    const dx = e.clientX - dragging.startX;
+    const currentLeft = parseFloat(getComputedStyle(root).getPropertyValue('--left-width'));
+    const currentRight = parseFloat(getComputedStyle(root).getPropertyValue('--right-width'));
+    if (dragging.side === 'left') {
+      const w = Math.max(240, Math.min(520, currentLeft + dx));
+      root.style.setProperty('--left-width', w + 'px');
+    } else {
+      const w = Math.max(220, Math.min(500, currentRight - dx));
+      root.style.setProperty('--right-width', w + 'px');
+    }
+    dragging.startX = e.clientX;
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!dragging) return;
+    leftHandle.classList.remove('active');
+    rightHandle.classList.remove('active');
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    dragging = null;
+    const l = parseFloat(getComputedStyle(root).getPropertyValue('--left-width'));
+    const r = parseFloat(getComputedStyle(root).getPropertyValue('--right-width'));
+    localStorage.setItem(KEY, JSON.stringify({ leftW: Math.round(l), rightW: Math.round(r) }));
+  });
+})();
+</script>
+</body>
+</html>
